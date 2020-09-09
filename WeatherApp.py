@@ -7,7 +7,7 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.pagelayout import PageLayout
 from kivy.properties import ObjectProperty
-from kivy.uix.listview import ListItemButton
+#from kivy.uix.listview import ListItemButton
 from kivy.uix.label import Label
 from kivy.uix.popup import Popup
 from kivy.uix.textinput import TextInput
@@ -63,10 +63,10 @@ Builder.load_string ('''
         #test
 
 class Weather(PageLayout):
-    #db_conn = sqlite3.connect('weather.db')
-
+    
     def callback(self,dt):
         self.get_weather()
+        
     def data_loop(self):
         Clock.schedule_interval(self.callback, 1800) #use 1800 for every half hour
     
@@ -216,17 +216,7 @@ class Weather(PageLayout):
                                                   self.asbytes(df.Humidity), self.asbytes(df.Wind)))
         db_conn.commit()
         
-    def asbytes(self, pdseries):
-        return np.array(pdseries).tobytes()
-
-    def get_gps(self):
-        pass
-
-    def get_local_pressure(self):
-        pass
-
-    def get_local_temp(self):
-        pass
+    
 
 
 
