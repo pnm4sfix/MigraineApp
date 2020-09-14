@@ -117,7 +117,7 @@ class Test(MDApp):
         self.get_data()
         
     def data_loop(self):
-        Clock.schedule_interval(self.data_callback, 30) #use 1800 for every half hour
+        Clock.schedule_interval(self.data_callback, 1800) #use 1800 for every half hour
     
     def notify_pain_update(self):
         plyer.notification.notify("Pain level", "Enter Pain Level")# figure out how this works
