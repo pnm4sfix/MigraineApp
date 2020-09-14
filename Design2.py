@@ -73,7 +73,7 @@ BoxLayout:
             icon: 'weather-cloudy-alert'
 
             MDLabel:
-                text: 'JS'
+                text: 'This is where predictions will be made'
                 halign: 'center'
 
 
@@ -95,6 +95,7 @@ class Test(MDApp):
         self.connect()
         self.create_db()
         self.data_loop()
+        
         return Builder.load_string(KV)
 
     def callback(self, instance):
@@ -239,10 +240,16 @@ class Test(MDApp):
         
 class GraphLayout(BoxLayout):
     
+    wid = 0
     def load_graphs(self):
+        try:
+            """Check if widgets already exist"""
+            self.remove_widget(self.wid)
+        except:
+            print("wid = 0")
         
-        """Check if widgets already exsist"""
-        self.add_widget(self.get_fc(1))
+        self.wid = self.get_fc(1)
+        self.add_widget(self.wid)
         #self.add_widget(self.get_fc(2))
         
     def get_fc(self, i):
@@ -253,10 +260,10 @@ class GraphLayout(BoxLayout):
         pain.plot(x="Time", y="PainScore", kind="line", ax=ax1)
         
         wid = FigureCanvas(fig1)
-        fig1.canvas.mpl_connect('figure_enter_event', enter_figure)
-        fig1.canvas.mpl_connect('figure_leave_event', leave_figure)
-        fig1.canvas.mpl_connect('axes_enter_event', enter_axes)
-        fig1.canvas.mpl_connect('axes_leave_event', leave_axes)
+        #fig1.canvas.mpl_connect('figure_enter_event', enter_figure)
+        #fig1.canvas.mpl_connect('figure_leave_event', leave_figure)
+        #fig1.canvas.mpl_connect('axes_enter_event', enter_axes)
+        #fig1.canvas.mpl_connect('axes_leave_event', leave_axes)
         return wid
 
    
