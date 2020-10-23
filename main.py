@@ -20,6 +20,7 @@ import matplotlib
 matplotlib.use('module://kivy.garden.matplotlib.backend_kivy')
 from kivy.garden.matplotlib.backend_kivyagg import FigureCanvas
 import matplotlib.pyplot as plt
+import datetime
 
 KV='''
 <GraphLayout>:
@@ -257,8 +258,11 @@ class GraphLayout(BoxLayout):
         fig1 = plt.figure()
         fig1.suptitle('Pain Level')
         ax1 = fig1.add_subplot(111)
-        pain.plot(x="Time", y="PainScore", kind="line", ax=ax1)
-        
+        pain.Time = datetime.datetime(pain.Time)
+        try:
+            pain.plot(x="Time", y="PainScore", kind="line", ax=ax1)
+        except:
+            print("Couldnt print pain data")
         wid = FigureCanvas(fig1)
         #fig1.canvas.mpl_connect('figure_enter_event', enter_figure)
         #fig1.canvas.mpl_connect('figure_leave_event', leave_figure)
