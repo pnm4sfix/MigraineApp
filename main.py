@@ -17,12 +17,23 @@ import time as t
 import plyer
 from kivymd.app import MDApp
 from kivy.clock import Clock
-import matplotlib
+import matplotlib 
 matplotlib.use('module://kivy.garden.matplotlib.backend_kivy')
 from kivy.garden.matplotlib.backend_kivyagg import FigureCanvas
 import matplotlib.pyplot as plt
 import datetime 
 from sqlalchemy import create_engine
+from sklearn.neural_network import MLPClassifier
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
+
+##TODO 
+##Save NN model in case app closed
+##Add text to prediction page indicating trained status, accuracy and when last trained
+##Plot prediction in second graph in analysis tab
+##Make home page more interesting
+##Blend graph canvas in with background
 
 KV='''
 <GraphLayout>:
@@ -69,15 +80,19 @@ BoxLayout:
             GraphLayout:
                 id: graph
             
+            
 
         MDBottomNavigationItem:
             name: 'screen 3'
             text: 'Predictors'
             icon: 'weather-cloudy-alert'
-
-            MDLabel:
-                text: 'This is where predictions will be made'
-                halign: 'center'
+            
+        
+            MDRoundFlatButton:
+                text: "Train"
+                pos_hint: {"center_x": .5, "center_y": .5}
+                on_press: app.train()
+            
 
 
 '''
@@ -98,7 +113,10 @@ class Test(MDApp):
         self.connect()
         self.create_db()
         self.data_loop()
+        #self.prediction_loop()
         self.get_gps()
+        self.predict = predict()
+        
         
         return Builder.load_string(KV)
 
@@ -275,7 +293,7 @@ class Test(MDApp):
     def get_data(self):
         """OLD -Get weather data and local phone data and add to db.
         NEW - Get weather data for last 2 days and add to db with sqlalchemy."""
-        daily_forecast_df, hourly_forecast_df = self.get_forecast()
+        
         historical_df = self.get_two_day_historical()
         
         self.save_to_table(historical_df, "historical")
@@ -287,7 +305,7 @@ class Test(MDApp):
         #data = pd.concat([weather_data, phone_data], axis=1)
         #self.add_db(db_conn, data)
         
-        return daily_forecast_df, hourly_forecast_df
+        #return daily_forecast_df, hourly_forecast_df
     
 
     def drop_tables(self):
@@ -341,6 +359,7 @@ class Test(MDApp):
     def store_value(self, value):
         db_conn, theCursor = self.connect()
         time=int(t.time())
+        time = self.get_datetime(time)
         try:
             db_conn.execute("INSERT INTO Pain(PainScore, Time)"
                             " VALUES (?,?)", (value, time ))
@@ -348,8 +367,38 @@ class Test(MDApp):
         except:
             "Couldnt insert new pain score"
         self.get_data()
-
     
+    def predict_pain_state(self, dt):
+        """Will use pain NN to predict pain score for the day-
+        maybe call once and look at 24 hr predictions for every hour in 
+        the day and show plot"""
+        print("Pain state loop started")
+        daily_forecast_df, hourly_forecast_df = self.get_forecast()
+        desc = hourly_forecast_df.description.unique()
+        pain_scores = []
+        times = []
+        df = hourly_forecast_df[["pressure", "temp", "humidity", "wind"]]
+        
+        for hour in range(24):
+            
+            df = df.iloc[hour:hour+24,:] # subset first 24 hrs
+            time = df.time.iloc[0]
+            vector = df.to_numpy().flatten()
+            pain_score = self.predict.pain_nn.predict(vector.reshape(1, -1))
+            pain_scores.append(pain_score)
+            times.append(time)
+            
+        """Add a prediction plot"""
+        self.ids.graph.load_graphs()
+        
+    
+    def prediction_loop(self):
+        Clock.schedule_interval(self.predict_pain_state, 10)
+    
+    def train(self):
+        print("Training")
+        self.predict.train()
+        print("Trained")
         
 class GraphLayout(BoxLayout):
     
@@ -358,24 +407,58 @@ class GraphLayout(BoxLayout):
         try:
             """Check if widgets already exist"""
             self.remove_widget(self.wid)
+            self.remove_widget(self.wid2)
         except:
             print("wid = 0")
         
-        self.wid = self.get_fc(1)
+        self.wid = self.pain_plot()
         self.add_widget(self.wid)
         #self.add_widget(self.get_fc(2))
+        self.wid2 = self.prediction_plot()
+        self.add_widget(self.wid2)
+        
+    def pain_plot(self):
+        pain = Test().return_table_as_df("Pain")
+        print(pain.dtypes)
+        #plt.style.use('dark_background')
+        fig1, ax1 = plt.subplots(facecolor=(.18, .31, .31))
+        fig1.suptitle('Pain Level')
+        
+        
+        pain.Time = pd.to_datetime(pain.Time, infer_datetime_format=True)
+        #pain.time = pd.to_datetime(pain.Time, infer_datetime_format=True)
+        try:
+            p = pain.plot(x="Time", y="PainScore", kind="line", ax=ax1)
+            ax1.set_facecolor((.36, .61, .62))
+            #p.set_axis_bgcolor(0, 0, 0, 50)
+        except:
+            print("Couldnt print pain data")
+        wid = FigureCanvas(fig1)
+        return wid
+    
+    def prediction_plot(self):
+        #plt.style.use('dark_background')
+        fig1, ax1 = plt.subplots(facecolor=(.18, .31, .31))
+        fig1.suptitle('Pain Prediction')
+        ax1.set_facecolor((.18, .31, .31))
+        wid = FigureCanvas(fig1)
+        return wid
         
     def get_fc(self, i):
         pain = Test().return_table_as_df("Pain")
+        
         print(pain.dtypes)
         fig1 = plt.figure()
         fig1.suptitle('Pain Level')
         ax1 = fig1.add_subplot(111)
-        pain.Time = pd.to_datetime(pain.Time)
+        pain.Time = pd.to_datetime(pain.Time, infer_datetime_format=True)
+        #pain.time = pd.to_datetime(pain.Time, infer_datetime_format=True)
         try:
-            pain.plot(x="Time", y="PainScore", kind="line", ax=ax1)
+            p = pain.plot(x="Time", y="PainScore", kind="line", ax=ax1)
+            
         except:
             print("Couldnt print pain data")
+        #fig1.style.use('dark_background')
         wid = FigureCanvas(fig1)
         #fig1.canvas.mpl_connect('figure_enter_event', enter_figure)
         #fig1.canvas.mpl_connect('figure_leave_event', leave_figure)
@@ -383,5 +466,116 @@ class GraphLayout(BoxLayout):
         #fig1.canvas.mpl_connect('axes_leave_event', leave_axes)
         return wid
 
-   
-Test().run()
+
+class predict(object):
+    
+    def train(self):
+        print("Training")
+        self.main()
+        self.predict_pain()
+        self.predict_description()
+        
+    
+    def main(self):
+        
+        self.db_conn = sqlite3.connect("weather.db")
+        self.pain_df = pd.read_sql_query("SELECT * FROM Pain", self.db_conn)
+        
+        self.weather_df = pd.read_sql_query("SELECT * FROM historical", self.db_conn)
+        #elf.pain_df.Time = pd.to_datetime(self.pain_df.Time, format='%Y%m%d%h%m%s', errors='ignore')
+        #self.pain_df.Time = self.pain_df.Time.apply(self.test.get_datetime) # wont need this line in final
+        self.pain_df.Time = pd.to_datetime(self.pain_df.Time, infer_datetime_format=True)
+        
+        self.weather_df.time = pd.to_datetime(self.weather_df.time, infer_datetime_format=True)
+        self.weather_df.temp = self.weather_df.temp.astype("float64")
+        
+        self.pain_df["Day1"] = self.pain_df.Time - pd.Timedelta(days=1)
+        self.pain_df["Day2"] = self.pain_df.Time - pd.Timedelta(days=2)
+    
+    
+    
+    def bootstrap(self, df):
+        """Bootstrap pain_df and weather_df to create larger dataset"""
+        core_df = pd.DataFrame()
+        for n in range(100):
+            sample = df.sample(frac = 0.6)
+            core_df = pd.concat([core_df, sample], axis=0)
+        
+        return core_df
+    
+    
+    
+    def extract_weather_data(self, pain_df, weather_df):
+        """Create 1 day windows of weather data for each pain score -return as a vector?"""
+        """Subset weather_df based on time, day1 and day2"""
+        vectors = []
+        pain_scores = []
+        weather_df = weather_df.drop_duplicates("time")
+        for n in range(pain_df.shape[0]):
+            subset = weather_df.loc[(weather_df.time < pain_df.Time.iloc[n]) & 
+                                    (weather_df.time > pain_df.Day1.iloc[n]), 
+                                     ["pressure", "temp", "humidity", "wind"]]
+            
+            vector = subset.to_numpy().flatten()
+            pain = pain_df.PainScore.iloc[n]
+            vectors.append(vector)
+            pain_scores.append(pain)
+        
+        return vectors, pain_scores
+            
+        
+    def predict_pain(self):                   
+        """Bootstrap, get data input and output, normalise, split in to test and train,
+        fit with MLP and test"""
+        self.boot_pain = self.bootstrap(self.pain_df)  
+        self.X, self.Y = self.extract_weather_data(self.boot_pain, self.weather_df)
+        #return vectors, pain_scores
+        
+        X_train, X_test, Y_train, Y_test = train_test_split(self.X, self.Y)
+        
+        scaler = StandardScaler()
+        scaler.fit(X_train)
+        X_train = scaler.transform(X_train)
+        X_test = scaler.transform(X_test)
+        
+        self.pain_nn = MLPClassifier(solver='lbfgs', alpha=1e-5,
+                     hidden_layer_sizes=(10, 10), random_state=1)
+        
+        self.pain_nn.fit(X_train, Y_train)
+        Y_pred = self.pain_nn.predict(X_test)
+        self.pain_accuracy = accuracy_score(Y_test, Y_pred, normalize =True)
+        #print("Accuracy is {}".format(accuracy))
+        
+        
+        
+              
+    
+    def predict_description(self):
+        """Create net that predicts description"""
+        
+        self.boot_weather = self.bootstrap(self.weather_df)
+        
+        self.description = self.boot_weather[["pressure", "temp", "humidity", "wind", "description"]] 
+        self.desc_Y = self.description.pop("description")
+        self.desc_X = self.description.to_numpy()
+        X_train, X_test, Y_train, Y_test = train_test_split(self.desc_X, self.desc_Y)
+        
+        scaler = StandardScaler()
+        scaler.fit(X_train)
+        X_train = scaler.transform(X_train)
+        X_test = scaler.transform(X_test)
+        
+        self.desc_nn = MLPClassifier(solver='lbfgs', alpha=1e-5,
+                     hidden_layer_sizes=(10, 10), random_state=1,
+                     max_iter=400)
+        
+        self.desc_nn.fit(X_train, Y_train)
+        Y_pred = self.desc_nn.predict(X_test)
+        self.desc_accuracy = accuracy_score(Y_test, Y_pred, normalize =True)
+        #("Accuracy is {}".format(accuracy))
+
+    
+    
+        
+test = Test()   
+test.run()
